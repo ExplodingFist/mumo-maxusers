@@ -1,7 +1,7 @@
 mumo-maxusers
 =============
 
-This is a mumo module to allow an administrator the capability of enforcing granular user limits by channel in mumble.
+This is a mumo module to provide an administrator the capability of enforcing granular user limits by channel in mumble.
 
 Features:
 - Can set a limit to every channel (global config)
