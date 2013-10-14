@@ -47,6 +47,7 @@ import re
 #
 #///////////////////////////////////////////////////////////////////////////////
 # Module configuration
+maxusers = {}
 
 class maxusers(MumoModule):
     default_config = {'maxusers':(
@@ -57,6 +58,7 @@ class maxusers(MumoModule):
                                 ),
                       lambda x: re.match('channel_\d+', x):(
                                 ('limit', int, 0),
+                                ('exceptions', commaSeperatedStrings, []),
                                 )
                     }
 
@@ -78,6 +80,25 @@ class maxusers(MumoModule):
         if not servers:
             servers = manager.SERVERS_ALL
         manager.subscribeServerCallbacks(self, servers)
+        
+        try:
+            # Get server connections
+            meta = manager.getMeta();
+            connServers = meta.getBootedServers();
+                
+            # Get all users current position and store to memory
+            userCount = 0
+            for serv in connServers:
+                userlist = serv.getUsers()
+                for user in userlist:
+                       entry = "%i-%s" % (serv.id(), userlist[user].name)
+                       #log.debug("User chan: %s - Server: %i - %s", userlist[user].channel, serv.id(), entry)
+                       setattr(maxusers, entry, userlist[user].channel)
+                       userCount = userCount + 1
+            log.debug("Successfully took snap shot of user positions into memory for %i users" % userCount)
+        except:
+            log.debug("Could not load user data into memory. Will track moving forward.")
+            # Fall back to ret
         
     def disconnected(self): pass
     
@@ -119,13 +140,21 @@ class maxusers(MumoModule):
                 log.info("Channel %i is now over max with %i users connected when there is a max of %i", curchan, chanCount, climit.limit)
                 # Where do I move the user back to?
                 try:
-                    moveto = getattr(maxusers, "%s" % state.name)
+                    entry = "%i-%s" % (server.id(), state.name)
+                    moveto = getattr(maxusers, "%s" % entry)
                 except:
                     # Previous channel isn't stored. Moving to defined return channel.
                     moveto = self.cfg().maxusers.ret
                     
                 # Is user an exception to the rule?
                 exceptions = self.cfg().maxusers.exceptions
+                # Check for channel specific exceptions, and replace
+                try: 
+                    cexcept = getattr(self.cfg(), 'channel_%d' % state.channel)
+                    if cexcept.exceptions:
+                        exceptions = cexcept.exceptions
+                except:
+                      log.debug("Exception merge failed")
                 override = 0
                 if exceptions:
                     # Get users ID and list of groups on channel
@@ -158,10 +187,13 @@ class maxusers(MumoModule):
             log.debug("User %s entered unmonitored channel %i", state.name, state.channel) # Remove
         
         # Putting users new current channel into memory for later reference
-        setattr(maxusers, "%s" % state.name, state.channel)
-        testing = getattr(maxusers, "%s" % state.name)
-        log.debug("Current channel stored as %s for %s", testing, state.name )
-    
+        
+        entry = "%i-%s" % (server.id(), state.name)
+        setattr(maxusers, entry, state.channel)
+        testing = getattr(maxusers, "%s" % entry)
+        log.debug("Current channel stored as %s for %s as entry %s", testing, state.name, entry )
+        
+        
     def userConnected(self, server, state, context = None):pass  
     def userDisconnected(self, server, state, context = None): pass
     def userTextMessage(self, server, user, message, current=None): pass
